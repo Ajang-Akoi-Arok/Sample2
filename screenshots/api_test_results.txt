@@ -1,0 +1,179 @@
+MoMo SMS REST API - curl test transcript
+Generated with: bash screenshots/run_tests.sh
+Server: python3 api/app.py   (http://localhost:8000, user 'admin')
+Dataset: 1691 transactions parsed from data/modified_sms_v2.xml
+
+
+========== 1. GET /transactions  (authenticated, truncated) ==========
+{
+  "count": 1691,
+  "transactions": [
+    {
+      "id": 1,
+      "transaction_type": "incoming_money",
+      "amount": 2000.0,
+      "fee": null,
+      "new_balance": 2000.0,
+      "sender": "Jane Smith",
+      "sender_phone": "*********013",
+      "receiver": null,
+      "receiver_phone": null,
+      "receiver_code": null,
+      "account": null,
+      "financial_transaction_id": "76662021700",
+      "timestamp": "2024-05-10T16:30:51",
+      "readable_date": "10 May 2024 4:30:58 PM",
+      "service_center": "+250788110381",
+      "address": "M-Money",
+      "body": "You have received 2000 RWF
+
+========== 2. GET /transactions/1  (authenticated) ==========
+HTTP/1.0 200 OK
+Server: MoMoAPI/1.0 Python/3.14.6
+Date: Sat, 19 Sep 2026 10:08:50 GMT
+Content-Type: application/json
+Content-Length: 665
+
+{
+  "id": 1,
+  "transaction_type": "incoming_money",
+  "amount": 2000.0,
+  "fee": null,
+  "new_balance": 2000.0,
+  "sender": "Jane Smith",
+  "sender_phone": "*********013",
+  "receiver": null,
+  "receiver_phone": null,
+  "receiver_code": null,
+  "account": null,
+  "financial_transaction_id": "76662021700",
+  "timestamp": "2024-05-10T16:30:51",
+  "readable_date": "10 May 2024 4:30:58 PM",
+  "service_center": "+250788110381",
+  "address": "M-Money",
+  "body": "You have received 2000 RWF from Jane Smith (*********013) on your mobile money account at 2024-05-10 16:30:51. Message from sender: . Your new balance:2000 RWF. Financial Transaction Id: 76662021700."
+}
+========== 3. GET /transactions  (WRONG password -> 401) ==========
+HTTP/1.0 401 Unauthorized
+Server: MoMoAPI/1.0 Python/3.14.6
+Date: Sat, 19 Sep 2026 10:08:50 GMT
+WWW-Authenticate: Basic realm="MoMo Transactions API"
+Content-Type: application/json
+Content-Length: 76
+
+{
+  "error": "Unauthorized: invalid username or password",
+  "status": 401
+}
+========== 4. GET /transactions  (NO credentials -> 401) ==========
+HTTP/1.0 401 Unauthorized
+Server: MoMoAPI/1.0 Python/3.14.6
+Date: Sat, 19 Sep 2026 10:08:50 GMT
+WWW-Authenticate: Basic realm="MoMo Transactions API"
+Content-Type: application/json
+Content-Length: 88
+
+{
+  "error": "Unauthorized: missing Basic Authentication credentials",
+  "status": 401
+}
+========== 5. POST /transactions  (create -> 201) ==========
+{
+  "id": 1692,
+  "transaction_type": "incoming_money",
+  "amount": 7500.0,
+  "fee": 0.0,
+  "new_balance": null,
+  "sender": "Chol Deng",
+  "sender_phone": null,
+  "receiver": "Test Account",
+  "receiver_phone": null,
+  "receiver_code": null,
+  "account": null,
+  "financial_transaction_id": null,
+  "timestamp": "2025-09-19T10:00:00",
+  "readable_date": null,
+  "service_center": null,
+  "address": null,
+  "body": null
+}
+
+--> server assigned id: 1692
+
+========== 6. PUT /transactions/1692  (update -> 200) ==========
+HTTP/1.0 200 OK
+Server: MoMoAPI/1.0 Python/3.14.6
+Date: Sat, 19 Sep 2026 10:08:50 GMT
+Content-Type: application/json
+Content-Length: 425
+
+{
+  "id": 1692,
+  "transaction_type": "incoming_money",
+  "amount": 9900.0,
+  "fee": 0.0,
+  "new_balance": null,
+  "sender": "Chol Deng",
+  "sender_phone": null,
+  "receiver": "Updated Account",
+  "receiver_phone": null,
+  "receiver_code": null,
+  "account": null,
+  "financial_transaction_id": null,
+  "timestamp": "2025-09-19T10:00:00",
+  "readable_date": null,
+  "service_center": null,
+  "address": null,
+  "body": null
+}
+========== 7. DELETE /transactions/1692  (delete -> 200) ==========
+HTTP/1.0 200 OK
+Server: MoMoAPI/1.0 Python/3.14.6
+Date: Sat, 19 Sep 2026 10:08:50 GMT
+Content-Type: application/json
+Content-Length: 519
+
+{
+  "message": "Transaction 1692 deleted",
+  "deleted": {
+    "id": 1692,
+    "transaction_type": "incoming_money",
+    "amount": 9900.0,
+    "fee": 0.0,
+    "new_balance": null,
+    "sender": "Chol Deng",
+    "sender_phone": null,
+    "receiver": "Updated Account",
+    "receiver_phone": null,
+    "receiver_code": null,
+    "account": null,
+    "financial_transaction_id": null,
+    "timestamp": "2025-09-19T10:00:00",
+    "readable_date": null,
+    "service_center": null,
+    "address": null,
+    "body": null
+  }
+}
+========== 8. GET /transactions/1692  (deleted -> 404) ==========
+HTTP/1.0 404 Not Found
+Server: MoMoAPI/1.0 Python/3.14.6
+Date: Sat, 19 Sep 2026 10:08:50 GMT
+Content-Type: application/json
+Content-Length: 60
+
+{
+  "error": "Transaction 1692 not found",
+  "status": 404
+}
+========== 9. POST /transactions  (invalid body -> 400) ==========
+HTTP/1.0 400 Bad Request
+Server: MoMoAPI/1.0 Python/3.14.6
+Date: Sat, 19 Sep 2026 10:08:50 GMT
+Content-Type: application/json
+Content-Length: 77
+
+{
+  "error": "Missing required field(s): transaction_type",
+  "status": 400
+}
