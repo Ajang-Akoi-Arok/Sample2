@@ -10,6 +10,8 @@ BAD_AUTH="admin:wrongpassword"
 hr() { printf '\n========== %s ==========\n' "$1"; }
 
 hr "1. GET /transactions  (authenticated, truncated)"
+curl -s -u "$AUTH" -o /dev/null \
+  -w 'HTTP status: %{http_code}  (expected 200)\n' "$BASE/transactions"
 curl -s -u "$AUTH" "$BASE/transactions" | head -c 600; echo
 
 hr "2. GET /transactions/1  (authenticated)"
@@ -22,10 +24,14 @@ hr "4. GET /transactions  (NO credentials -> 401)"
 curl -s -i "$BASE/transactions"
 
 hr "5. POST /transactions  (create -> 201)"
-CREATED=$(curl -s -u "$AUTH" -X POST "$BASE/transactions" \
+RAW=$(curl -s -u "$AUTH" -X POST "$BASE/transactions" \
   -H "Content-Type: application/json" \
+  -w '__STATUS__%{http_code}' \
   -d '{"transaction_type":"incoming_money","amount":7500,"fee":0,"sender":"Chol Deng","receiver":"Test Account","timestamp":"2025-09-19T10:00:00"}')
+CREATED=${RAW%__STATUS__*}
+STATUS=${RAW##*__STATUS__}
 echo "$CREATED"
+printf -- '--> HTTP status: %s  (expected 201)\n' "$STATUS"
 
 # Read the server-assigned id back so the script can be re-run against a live server.
 NEW_ID=$(printf '%s' "$CREATED" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9]*\).*/\1/p' | head -1)
