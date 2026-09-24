@@ -1,0 +1,33 @@
+Linear Search vs Dictionary Lookup - MoMo SMS transactions
+Generated with: python3 dsa/dsa_comparison.py
+
+Dataset: 1691 transactions | 1000 repeats per measurement
+
+    ID  Position   Linear (us)   Dict (us)   Speed-up
+------------------------------------------------------
+     1         1         0.082       0.065       1.3x
+    85        85         1.865       0.065      28.8x
+   169       169         3.665       0.064      57.0x
+   253       253         5.741       0.065      88.5x
+   337       337         8.003       0.065     123.9x
+   421       421        10.153       0.065     156.6x
+   505       505        12.116       0.064     189.8x
+   589       589        14.191       0.066     216.0x
+   673       673        16.121       0.063     254.9x
+   757       757        18.248       0.065     280.2x
+   841       841        20.365       0.065     313.7x
+   925       925        22.371       0.065     345.5x
+  1009      1009        24.495       0.065     379.3x
+  1093      1093        26.518       0.065     410.6x
+  1177      1177        28.395       0.065     436.6x
+  1261      1261        30.565       0.063     481.7x
+  1345      1345        32.018       0.066     485.4x
+  1429      1429        34.878       0.065     533.8x
+  1513      1513        36.650       0.065     561.3x
+  1597      1597        38.320       0.065     591.8x
+------------------------------------------------------
+         AVERAGE        19.238       0.065     297.1x
+
+Linear search  : O(n)  - average 19.238 us per lookup
+Dictionary     : O(1)  - average 0.065 us per lookup
+Dictionary lookup is about 297.1x faster on this dataset.
