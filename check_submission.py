@@ -186,7 +186,8 @@ if os.path.exists(report):
 # --- individual effort, the multiplier ---------------------------------------
 
 try:
-    log = subprocess.run(["git", "shortlog", "-sne", "HEAD"], cwd=ROOT,
+    git_bin = subprocess.run(["which", "git"], capture_output=True, text=True).stdout.strip() or "git"
+    log = subprocess.run([git_bin, "shortlog", "-sne", "HEAD"], cwd=ROOT,
                          capture_output=True, text=True, timeout=20)
     authors = [ln.strip() for ln in log.stdout.strip().splitlines() if ln.strip()]
 except Exception:

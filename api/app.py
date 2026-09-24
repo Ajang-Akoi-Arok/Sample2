@@ -25,8 +25,15 @@ ID_ROUTE = re.compile(r"^/transactions/(\d+)/?$")
 LIST_ROUTE = re.compile(r"^/transactions/?$")
 
 # id -> transaction. A dictionary keeps every lookup O(1); see dsa/dsa_comparison.py.
-STORE = {}
-NEXT_ID = 1
+class _State:
+    store: dict = None
+    next_id: int = 1
+
+    def __init__(self):
+        self.store = {}
+        self.next_id = 1
+
+_state = _State()
 
 EDITABLE_FIELDS = (
     "transaction_type", "amount", "fee", "new_balance", "sender", "sender_phone",
@@ -39,10 +46,9 @@ REQUIRED_FIELDS = ("transaction_type", "amount")
 
 def bootstrap():
     """Load the parsed dataset into the in-memory store."""
-    global NEXT_ID
     for record in load_transactions():
-        STORE[record["id"]] = record
-    NEXT_ID = max(STORE) + 1 if STORE else 1
+        _state.store[record["id"]] = record
+    _state.next_id = max(_state.store) + 1 if _state.store else 1
 
 
 def validate(payload, partial=False):
@@ -143,13 +149,13 @@ class TransactionHandler(BaseHTTPRequestHandler):
             return
 
         if LIST_ROUTE.match(self.path.split("?")[0]):
-            records = sorted(STORE.values(), key=lambda r: r["id"])
+            records = sorted(_state.store.values(), key=lambda r: r["id"])
             self.send_json(200, {"count": len(records), "transactions": records})
             return
 
         match = ID_ROUTE.match(self.path)
         if match:
-            record = STORE.get(int(match.group(1)))
+            record = _state.store.get(int(match.group(1)))
             if record is None:
                 self.send_error_json(404, f"Transaction {match.group(1)} not found")
                 return
@@ -174,12 +180,11 @@ class TransactionHandler(BaseHTTPRequestHandler):
             self.send_error_json(400, error)
             return
 
-        global NEXT_ID
-        record = {"id": NEXT_ID}
+        record = {"id": _state.next_id}
         record.update({field: None for field in EDITABLE_FIELDS})
         record.update(cleaned)
-        STORE[NEXT_ID] = record
-        NEXT_ID += 1
+        _state.store[_state.next_id] = record
+        _state.next_id += 1
 
         self.send_json(201, record)
 
@@ -192,7 +197,7 @@ class TransactionHandler(BaseHTTPRequestHandler):
             return
 
         record_id = int(match.group(1))
-        if record_id not in STORE:
+        if record_id not in _state.store:
             self.send_error_json(404, f"Transaction {record_id} not found")
             return
 
@@ -205,8 +210,8 @@ class TransactionHandler(BaseHTTPRequestHandler):
             self.send_error_json(400, error)
             return
 
-        STORE[record_id].update(cleaned)
-        self.send_json(200, STORE[record_id])
+        _state.store[record_id].update(cleaned)
+        self.send_json(200, _state.store[record_id])
 
     def do_DELETE(self):
         if not self.authenticated():
@@ -217,18 +222,18 @@ class TransactionHandler(BaseHTTPRequestHandler):
             return
 
         record_id = int(match.group(1))
-        if record_id not in STORE:
+        if record_id not in _state.store:
             self.send_error_json(404, f"Transaction {record_id} not found")
             return
 
-        deleted = STORE.pop(record_id)
+        deleted = _state.store.pop(record_id)
         self.send_json(200, {"message": f"Transaction {record_id} deleted", "deleted": deleted})
 
 
 def main():
     bootstrap()
     server = HTTPServer((HOST, PORT), TransactionHandler)
-    print(f"Loaded {len(STORE)} transactions")
+    print(f"Loaded {len(_state.store)} transactions")
     print(f"Serving on http://{HOST}:{PORT}  (user: {USERNAME})")
     try:
         server.serve_forever()

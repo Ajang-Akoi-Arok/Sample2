@@ -9,3 +9,4 @@
 # reportlab is only required to regenerate the PDF report:
 #   python3 docs/build_report.py
 reportlab>=4.0
+defusedxml>=0.7.1

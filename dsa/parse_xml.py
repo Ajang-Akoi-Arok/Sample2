@@ -15,8 +15,12 @@ the same parsing code feeds both the JSON file and the running service.
 import json
 import os
 import re
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
+
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    import xml.etree.ElementTree as ET
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_XML = os.path.join(BASE_DIR, "data", "modified_sms_v2.xml")
@@ -40,7 +44,7 @@ def _iso(value):
     if not value:
         return None
     try:
-        return datetime.strptime(value.strip(), "%Y-%m-%d %H:%M:%S").isoformat()
+        return datetime.fromisoformat(value.strip().replace(" ", "T")).isoformat()
     except ValueError:
         return None
 
@@ -225,12 +229,18 @@ def parse_sms(element, index):
 
 def parse_file(xml_path=DEFAULT_XML):
     """Parse the whole XML export and return a list of transaction dictionaries."""
+    xml_path = os.path.realpath(xml_path)
+    if not xml_path.startswith(os.path.realpath(BASE_DIR)):
+        raise ValueError(f"Refusing to read file outside project directory: {xml_path}")
     tree = ET.parse(xml_path)
     root = tree.getroot()
     return [parse_sms(sms, i) for i, sms in enumerate(root.findall("sms"), start=1)]
 
 
 def save_json(transactions, json_path=DEFAULT_JSON):
+    json_path = os.path.realpath(json_path)
+    if not json_path.startswith(os.path.realpath(BASE_DIR)):
+        raise ValueError(f"Refusing to write file outside project directory: {json_path}")
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, "w", encoding="utf-8") as handle:
         json.dump(transactions, handle, indent=2, ensure_ascii=False)
