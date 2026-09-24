@@ -19,7 +19,7 @@ from reportlab.platypus import (
 )
 
 # ---------------------------------------------------------------- edit me ----
-TEAM_NAME = "Team dema3"
+TEAM_NAME = "Ajang Akoi Arok Biar"
 AUTHORS = "Chol Deng"
 COURSE = "Building and Securing a REST API"
 REPO_URL = "https://github.com/Chol1000/dema3"
