@@ -31,9 +31,28 @@ The dataset has 1,691 SMS records and comes from `data/modified_sms_v2.xml`.
 │   ├── run_tests.sh            # curl tests for every endpoint
 │   ├── api_test_results.txt    # Saved output of those tests
 │   └── dsa_results.txt         # Saved output of the benchmark
+├── check_submission.py         # Checks nothing is missing before submitting
 ├── requirements.txt
 └── README.md
 ```
+
+---
+
+## Where each task lives
+
+The assignment has six tasks. This is where each one is:
+
+| Task | Where |
+|---|---|
+| 1. Data parsing | `dsa/parse_xml.py`, output in `data/transactions.json` |
+| 2. CRUD endpoints | `api/app.py` |
+| 3. Authentication and security | `api/app.py`, written up in `docs/security_notes.md` |
+| 4. API documentation | `docs/api_docs.md` |
+| 5. Linear search vs dictionary | `dsa/dsa_comparison.py`, output in `screenshots/dsa_results.txt` |
+| 6. Testing | `screenshots/run_tests.sh`, output in `screenshots/api_test_results.txt` |
+
+The parser sits in `dsa/` rather than at the top level because the assignment
+asks for "XML parsing & DSA code (dsa/ folder)".
 
 ---
 
@@ -78,6 +97,34 @@ Records per transaction type:
   ...
 ```
 
+Here is one record from the output, so you can see the shape of it:
+
+```json
+{
+  "id": 1,
+  "transaction_type": "incoming_money",
+  "amount": 2000.0,
+  "fee": null,
+  "new_balance": 2000.0,
+  "sender": "Jane Smith",
+  "sender_phone": "*********013",
+  "receiver": null,
+  "receiver_phone": null,
+  "receiver_code": null,
+  "account": null,
+  "financial_transaction_id": "76662021700",
+  "timestamp": "2024-05-10T16:30:51",
+  "readable_date": "10 May 2024 4:30:58 PM",
+  "service_center": "+250788110381",
+  "address": "M-Money",
+  "body": "You have received 2000 RWF from Jane Smith (*********013) on your mobile ..."
+}
+```
+
+Plenty of the fields are null on any given record and that is normal. This one
+is money coming in, so it has a sender but no receiver. An outgoing payment is
+the other way round. The parser only fills in what the SMS actually says.
+
 ### Step 2 — start the API
 
 ```bash
@@ -95,6 +142,11 @@ The login is `admin` / `momo2025` by default. You can change it without touching
 API_USERNAME=myuser API_PASSWORD=mysecret API_PORT=9000 python3 api/app.py
 ```
 
+Those defaults are only there so the project runs straight after cloning. They are
+not a secret, they are printed in this README, and anything real should set
+`API_USERNAME` and `API_PASSWORD` instead. The server also listens on `localhost`
+only, so nothing outside your own machine can reach it.
+
 ### Step 3 — run the benchmark
 
 ```bash
@@ -102,6 +154,7 @@ python3 dsa/dsa_comparison.py
 ```
 
 This one takes about 30 seconds because it repeats each measurement a thousand times.
+It prints how far along it is as it goes, so you can tell it has not frozen.
 
 ---
 
@@ -161,6 +214,18 @@ what happened. The saved output is in
 
 The script reads the new id out of the POST response instead of assuming what it will be, so you can
 run it as many times as you like against the same server.
+
+There is also a checklist script that looks over the whole repo and tells you if anything the
+assignment asks for is missing:
+
+```bash
+python3 check_submission.py
+```
+
+It checks the parsed JSON has the key fields, that all four HTTP methods are handled, that the
+security notes cover JWT and OAuth 2.0, that every endpoint is documented with examples and error
+codes, that at least 20 records were benchmarked, that the screenshots are there, and that more than
+one person has committed. It does not test the running API, so use `run_tests.sh` for that.
 
 ---
 

@@ -1,4 +1,16 @@
-"""Parse the MoMo SMS XML export into normalised JSON transaction objects."""
+"""Parse the MoMo SMS XML export into normalised JSON transaction objects.
+
+This file covers Task 1 of the assignment, Data Parsing. It reads
+data/modified_sms_v2.xml, turns every <sms> element into a dictionary, and
+writes the whole lot to data/transactions.json as a list of dictionaries.
+
+Run it on its own to regenerate the JSON:
+
+    python3 dsa/parse_xml.py
+
+The API imports load_transactions() from here to fill its in-memory store, so
+the same parsing code feeds both the JSON file and the running service.
+"""
 
 import json
 import os

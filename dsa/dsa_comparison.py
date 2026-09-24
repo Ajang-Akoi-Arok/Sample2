@@ -61,8 +61,19 @@ def benchmark(transactions, sample_size=20):
     step = max(1, len(ids) // sample_size)
     targets = ids[::step][:sample_size]
 
+    # Timing 20 ids at 1000 repeats each takes roughly half a minute, so show
+    # progress. Otherwise it looks like the script has hung. Only do this when
+    # someone is actually watching a terminal, because the carriage returns
+    # make a mess when the output is redirected into a file.
+    show_progress = sys.stdout.isatty()
+    if show_progress:
+        print(f"Timing {len(targets)} ids at {REPEATS} repeats each. "
+              f"This takes about 30 seconds.\n", flush=True)
+
     rows = []
-    for target_id in targets:
+    for n, target_id in enumerate(targets, start=1):
+        if show_progress:
+            print(f"\r  measuring {n}/{len(targets)} ...", end="", flush=True)
         linear = timeit.timeit(lambda: linear_search(transactions, target_id), number=REPEATS)
         lookup = timeit.timeit(lambda: dict_lookup(index, target_id), number=REPEATS)
         assert linear_search(transactions, target_id) == dict_lookup(index, target_id)
@@ -75,6 +86,8 @@ def benchmark(transactions, sample_size=20):
             # One hash of the key, then one bucket probe - constant regardless of size.
             "dict_cmps": 1,
         })
+    if show_progress:
+        print("\r" + " " * 40 + "\r", end="", flush=True)
     return rows
 
 
