@@ -22,7 +22,7 @@ from reportlab.platypus import (
 TEAM_NAME = "Ajang Akoi Arok Biar"
 AUTHORS = "Chol Deng"
 COURSE = "Building and Securing a REST API"
-REPO_URL = "https://github.com/Chol1000/dema3"
+REPO_URL = "https://github.com/Ajang-Akoi-Arok/dema3"
 # -----------------------------------------------------------------------------
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -72,7 +72,7 @@ pip install -r requirements.txt
 ## Getting it running
 
 ```bash
-git clone https://github.com/Chol1000/dema3.git
+git clone https://github.com/Ajang-Akoi-Arok/dema3.git
 cd dema3
 ```
 
