@@ -13,8 +13,10 @@ search strategies (linear search vs. dictionary lookup) over the parsed data.
 ```
 .
 ├── api/
+│   ├── __init__.py
 │   └── app.py                  # REST API (http.server) with Basic Auth + CRUD
 ├── dsa/
+│   ├── __init__.py
 │   ├── parse_xml.py            # XML -> JSON transaction parser
 │   └── dsa_comparison.py       # Linear search vs dictionary lookup benchmark
 ├── data/
@@ -29,6 +31,7 @@ search strategies (linear search vs. dictionary lookup) over the parsed data.
 │   ├── run_tests.sh            # curl test suite covering every endpoint
 │   ├── api_test_results.txt    # Captured request/response transcript
 │   └── dsa_results.txt         # Captured benchmark output
+├── requirements.txt            # Stdlib only; reportlab needed for the PDF report
 └── README.md
 ```
 
@@ -36,8 +39,15 @@ search strategies (linear search vs. dictionary lookup) over the parsed data.
 
 ## Requirements
 
-Python 3.8 or newer. No third-party packages — the API uses only the standard library
-(`http.server`, `xml.etree.ElementTree`, `base64`, `hmac`, `json`).
+Python 3.8 or newer. The parser, API, benchmark and test suite need **no third-party packages** —
+they use only the standard library (`http.server`, `xml.etree.ElementTree`, `base64`, `hmac`,
+`json`, `timeit`).
+
+`reportlab` is needed only to regenerate the PDF report:
+
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
@@ -152,19 +162,24 @@ transcript is in [`screenshots/api_test_results.txt`](screenshots/api_test_resul
 
 Linear search vs. dictionary lookup across 20 ids spread over all 1,691 records, 1,000 repeats each:
 
-| Target position | Linear search (µs) | Dictionary lookup (µs) | Speed-up |
-|---|---|---|---|
-| 1 | 0.082 | 0.065 | 1.3× |
-| 421 | 10.153 | 0.065 | 156.6× |
-| 841 | 20.365 | 0.065 | 313.7× |
-| 1261 | 30.565 | 0.063 | 481.7× |
-| 1597 | 38.320 | 0.065 | 591.8× |
-| **Average** | **19.238** | **0.065** | **297.1×** |
+| Target position | Linear (µs) | Dictionary (µs) | Speed-up | Linear comparisons | Dict comparisons |
+|---|---|---|---|---|---|
+| 1 | 0.079 | 0.063 | 1.3× | 1 | 1 |
+| 421 | 10.207 | 0.065 | 158.0× | 421 | 1 |
+| 841 | 20.464 | 0.062 | 328.5× | 841 | 1 |
+| 1261 | 30.529 | 0.064 | 476.1× | 1261 | 1 |
+| 1597 | 39.065 | 0.063 | 616.8× | 1597 | 1 |
+| **Average** | **19.355** | **0.064** | **304.5×** | **799.0** | **1.0** |
 
 Linear search costs grow linearly with how deep the record sits in the list — **O(n)**. Dictionary
-lookup stays flat at roughly 0.065 µs regardless of position — **O(1)** — because Python hashes the
+lookup stays flat at roughly 0.064 µs regardless of position — **O(1)** — because Python hashes the
 key directly to its bucket instead of comparing records one by one. On this dataset that is about a
-**297× average speed-up**.
+**304× average speed-up**.
+
+The comparison counts make the same point without depending on machine speed: linear search needs
+exactly as many comparisons as the record's position (1, then 421, then 841 …), while the dictionary
+needs exactly **1** every time. A faster processor would shrink both timing columns but would not
+change those counts, which is what makes the difference structural rather than incidental.
 
 Other options that would improve on linear search:
 
