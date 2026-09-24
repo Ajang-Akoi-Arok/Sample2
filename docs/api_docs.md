@@ -289,6 +289,30 @@ All errors share the same shape:
 
 ---
 
+## Security notes
+
+Basic Authentication protects every endpoint above, but the scheme has real limits that matter for
+financial data. In short:
+
+- **Base64 is encoding, not encryption.** `YWRtaW46bW9tbzIwMjU=` decodes to `admin:momo2025` with a
+  single shell command, so the password is effectively sent in clear text. Basic Auth is only ever
+  acceptable over HTTPS.
+- **The password is replayed on every request**, multiplying the chances of it leaking into a log,
+  a crash report or a screenshot.
+- **No expiry and no revocation.** The credential is valid until someone changes the password, and
+  changing it breaks every other client at once.
+- **One shared account** means no audit trail (the log shows "admin", not *who*) and no least
+  privilege, since a read-only client holds a credential that can also `DELETE`.
+- **No rate limiting**, so an attacker can brute-force at the speed the server responds.
+
+Stronger alternatives are **JWT** (a signed, expiring token issued once at login, carrying user and
+role claims) and **OAuth 2.0** (scoped tokens issued to third-party apps, revocable per app, so the
+app never sees the user's password). Both should run over HTTPS with hashed password storage.
+
+Full discussion: [`security_notes.md`](security_notes.md).
+
+---
+
 ## Testing
 
 The full request/response transcript lives in [`../screenshots/api_test_results.txt`](../screenshots/api_test_results.txt)
