@@ -148,43 +148,48 @@ def build():
     # ------------------------------------------------------- 1. intro sec --
     s.append(P("1. Introduction to API Security", "h1"))
     s.append(P(
-        "An API is the door through which every client application reaches the data behind it. "
-        "For a mobile money system that data is highly sensitive: transaction amounts, account "
-        "balances, phone numbers and the names of both parties to a payment. If that door is left "
-        "unlocked, anyone who can reach the server can read every customer's financial history, or "
-        "worse, modify and delete records. API security is therefore not an optional extra bolted "
-        "on at the end; it is a basic requirement of the design."))
+        "An API is the way every client application gets to the data behind it, which means it is "
+        "also the way anyone else would get to that data if it were left open. For a mobile money "
+        "system that data is about as sensitive as it gets. It says how much money moved, who sent "
+        "it, who received it, their phone numbers, and what the balance was afterwards. Someone who "
+        "can reach an unprotected version of this API can read a customer's entire financial "
+        "history, and if the write endpoints are open too, they can change it or delete it."))
     s.append(P(
-        "Securing an API rests on three distinct ideas that are easily confused. "
-        "<b>Authentication</b> answers \"who is making this request?\". "
-        "<b>Authorization</b> answers \"is this caller allowed to do this particular thing?\". "
-        "<b>Confidentiality</b> answers \"can anyone else read this exchange while it travels across "
-        "the network?\", and is provided by transport encryption (HTTPS/TLS). A system needs all "
-        "three. Strong authentication is worthless if the credential is transmitted in clear text, "
-        "and encryption is worthless if every authenticated caller is allowed to delete anything."))
+        "When people talk about securing an API they usually mean three different things, and it "
+        "helps to keep them apart. <b>Authentication</b> is about working out who is making the "
+        "request. <b>Authorization</b> is about deciding whether that person is allowed to do the "
+        "particular thing they are asking for. <b>Confidentiality</b> is about stopping anyone else "
+        "from reading the exchange while it crosses the network, which is what HTTPS gives you."))
     s.append(P(
-        "This project implements the first of those three using HTTP Basic Authentication, as "
-        "required by the assignment. Every endpoint rejects unauthenticated requests with a "
-        "<b>401 Unauthorized</b> response. Section 5 examines honestly where that scheme falls "
-        "short and what a production deployment would use instead."))
+        "You need all three, because any one of them on its own leaves a hole. Checking a password "
+        "carefully does not help if that password is being sent in a form anyone can read. "
+        "Encrypting the connection does not help if every user who logs in is allowed to delete "
+        "everything. This project covers the first of the three, using HTTP Basic Authentication, "
+        "because that is what the assignment asked for. Every endpoint turns away requests that are "
+        "not authenticated with a 401 response. Section 5 goes through where that approach falls "
+        "short, which is further than we expected when we started."))
 
     # -------------------------------------------------- 2. system overview --
     s.append(P("2. System Overview and Data Parsing", "h1"))
     s.append(P(
-        "The source dataset, <font face='Courier'>modified_sms_v2.xml</font>, is an SMS backup "
-        "export containing 1,691 <font face='Courier'>&lt;sms&gt;</font> elements from an MTN "
-        "Mobile Money account. The useful content sits in the <font face='Courier'>body</font> "
-        "attribute of each element as free-form human-readable text, so the parser has to read "
-        "meaning out of prose rather than out of structured fields."))
+        "The file we were given, <font face='Courier'>modified_sms_v2.xml</font>, is an SMS backup "
+        "from an MTN Mobile Money account. It holds 1,691 "
+        "<font face='Courier'>&lt;sms&gt;</font> elements. The catch is that the useful information "
+        "is not sitting in neat XML fields. It is inside the <font face='Courier'>body</font> "
+        "attribute as ordinary English sentences, the same text a person would read on their phone. "
+        "So the parser cannot just pull out tags. It has to read meaning out of prose."))
     s.append(P(
-        "<font face='Courier'>dsa/parse_xml.py</font> handles this with a list of labelled regular "
-        "expressions. Each SMS body is tested against the patterns in order; the first match "
-        "determines the transaction category and supplies the named capture groups for amount, fee, "
-        "new balance, sender, receiver, account and transaction id. Amounts written as "
-        "\"12,500\" are normalised to floats, and timestamps are converted to ISO-8601. Where a "
-        "message carries no readable timestamp, the parser falls back to the epoch "
-        "<font face='Courier'>date</font> attribute on the element."))
-    s.append(P("The 1,691 records break down as follows:"))
+        "We handled that in <font face='Courier'>dsa/parse_xml.py</font> with a list of regular "
+        "expressions, each one labelled with the kind of transaction it matches. Every SMS body is "
+        "tested against the patterns in order, and the first one that matches decides the "
+        "transaction type and pulls out the pieces we want: the amount, the fee, the new balance, "
+        "the sender, the receiver, the account and the transaction id."))
+    s.append(P(
+        "A few small things needed cleaning up along the way. Amounts appear in the messages written "
+        "as \"12,500\", so they get their commas stripped and become numbers rather than staying as "
+        "text. Dates get converted to ISO-8601. Some messages carry no readable time at all, and "
+        "for those we fall back to the epoch timestamp stored on the element itself."))
+    s.append(P("Here is how the 1,691 records break down:"))
 
     counts = [
         ("payment_to_code_holder", "658"), ("transfer_to_mobile", "585"),
@@ -202,38 +207,38 @@ def build():
     data += [[l[0], l[1], r[0], r[1]] for l, r in zip(left, right)]
     s.append(grid(data, [4.7 * cm, 1.7 * cm, 4.7 * cm, 1.7 * cm], align_right=(1, 3)))
     s.append(Spacer(1, 4))
-    s.append(P("Table 1 — Records per transaction type. All 1,691 records are classified; "
-               "none fall into an unrecognised category.", "caption"))
+    s.append(P("Table 1 — How many records of each type. Every record in the file matched one of "
+               "these, so nothing was left unrecognised.", "caption"))
     s.append(P(
-        "The parser writes the result to <font face='Courier'>data/transactions.json</font> as a "
-        "list of dictionaries, which is exactly the shape the API then serves."))
+        "The parser saves all of this to <font face='Courier'>data/transactions.json</font> as a "
+        "list of dictionaries, which is exactly the shape the API needs in order to serve it."))
 
     s.append(PageBreak())
 
     # ------------------------------------------------ 3. endpoint docs -----
     s.append(P("3. API Endpoint Documentation", "h1"))
     s.append(P(
-        "The API is written in plain Python on top of "
-        "<font face='Courier'>http.server</font>, with no third-party dependencies. It exposes five "
-        "CRUD endpoints over the parsed transactions. Records are held in memory in a dictionary "
-        "keyed by id, so lookups by id are O(1) (see Section 6). <b>Every endpoint requires Basic "
-        "Authentication.</b>"))
+        "The API is written in plain Python using <font face='Courier'>http.server</font>, with no "
+        "outside libraries. It gives you five endpoints covering the usual create, read, update and "
+        "delete operations. The records live in memory in a dictionary keyed by id, which is why "
+        "looking one up is quick no matter how many there are. Section 6 covers that properly. "
+        "<b>Every one of these endpoints needs a username and password.</b>"))
 
-    ep = [["Method", "Endpoint", "Purpose", "Success"]]
+    ep = [["Method", "Endpoint", "What it does", "Success"]]
     ep += [
-        ["GET", "/transactions", "List all transactions", "200"],
-        ["GET", "/transactions/{id}", "Retrieve one transaction", "200"],
-        ["POST", "/transactions", "Create a transaction", "201"],
-        ["PUT", "/transactions/{id}", "Update an existing record", "200"],
-        ["DELETE", "/transactions/{id}", "Delete a record", "200"],
+        ["GET", "/transactions", "Lists every transaction", "200"],
+        ["GET", "/transactions/{id}", "Gets one transaction", "200"],
+        ["POST", "/transactions", "Adds a new one", "201"],
+        ["PUT", "/transactions/{id}", "Updates an existing one", "200"],
+        ["DELETE", "/transactions/{id}", "Deletes one", "200"],
     ]
     s.append(grid(ep, [1.8 * cm, 4.4 * cm, 6.0 * cm, 1.6 * cm]))
     s.append(Spacer(1, 4))
-    s.append(P("Table 2 — CRUD endpoints.", "caption"))
+    s.append(P("Table 2 — The five endpoints.", "caption"))
 
-    s.append(P("3.1 Request and response examples", "h2"))
+    s.append(P("3.1 Examples", "h2"))
 
-    s.append(P("<b>GET /transactions/1</b> — retrieve a single record", "body"))
+    s.append(P("<b>GET /transactions/1</b> gets a single record.", "body"))
     s.append(P("$ curl -u admin:momo2025 http://localhost:8000/transactions/1", "code"))
     s.append(P("HTTP/1.0 200 OK<br/>"
                "Content-Type: application/json<br/><br/>"
@@ -248,9 +253,9 @@ def build():
                "&nbsp;&nbsp;\"timestamp\": \"2024-05-10T16:30:51\"<br/>"
                "}", "code"))
 
-    s.append(P("<b>POST /transactions</b> — create a record. "
+    s.append(P("<b>POST /transactions</b> adds a record. You have to send "
                "<font face='Courier'>transaction_type</font> and "
-               "<font face='Courier'>amount</font> are required; the server assigns the id.", "body"))
+               "<font face='Courier'>amount</font>, and the server picks the id.", "body"))
     s.append(P("$ curl -u admin:momo2025 -X POST http://localhost:8000/transactions \\<br/>"
                "&nbsp;&nbsp;-H \"Content-Type: application/json\" \\<br/>"
                "&nbsp;&nbsp;-d '{\"transaction_type\":\"incoming_money\",\"amount\":7500,"
@@ -263,17 +268,19 @@ def build():
                "&nbsp;&nbsp;\"sender\": \"Chol Deng\"<br/>"
                "}", "code"))
 
-    s.append(P("<b>PUT /transactions/1692</b> — partial update; send only changed fields.", "body"))
+    s.append(P("<b>PUT /transactions/1692</b> changes a record. Send only the fields you want to "
+               "change and the rest stay as they were.", "body"))
     s.append(P("$ curl -u admin:momo2025 -X PUT http://localhost:8000/transactions/1692 \\<br/>"
                "&nbsp;&nbsp;-H \"Content-Type: application/json\" -d '{\"amount\":9900}'"
                "<br/><br/>HTTP/1.0 200 OK", "code"))
 
-    s.append(P("<b>DELETE /transactions/1692</b> — remove a record.", "body"))
+    s.append(P("<b>DELETE /transactions/1692</b> removes a record, and hands back what it deleted "
+               "so you can see what has gone.", "body"))
     s.append(P("$ curl -u admin:momo2025 -X DELETE http://localhost:8000/transactions/1692"
                "<br/><br/>HTTP/1.0 200 OK<br/>"
                "{ \"message\": \"Transaction 1692 deleted\", \"deleted\": { ... } }", "code"))
 
-    s.append(P("<b>Unauthorised request</b> — wrong password.", "body"))
+    s.append(P("And this is what you get with the wrong password.", "body"))
     s.append(P("$ curl -i -u admin:wrongpassword http://localhost:8000/transactions<br/><br/>"
                "HTTP/1.0 401 Unauthorized<br/>"
                "WWW-Authenticate: Basic realm=\"MoMo Transactions API\"<br/><br/>"
@@ -281,129 +288,140 @@ def build():
                "code"))
 
     s.append(P("3.2 Error codes", "h2"))
-    errs = [["Code", "Name", "When it occurs"]]
+    errs = [["Code", "Name", "When you get it"]]
     errs += [
-        ["200", "OK", "Successful GET, PUT or DELETE"],
-        ["201", "Created", "Successful POST"],
-        ["400", "Bad Request", "Malformed JSON, missing required field, unknown field, "
-                               "or a negative / non-numeric amount"],
-        ["401", "Unauthorized", "Absent, malformed or incorrect Basic Auth credentials"],
-        ["404", "Not Found", "Unknown transaction id, or unknown endpoint"],
+        ["200", "OK", "A GET, PUT or DELETE worked"],
+        ["201", "Created", "A POST worked"],
+        ["400", "Bad Request", "Broken JSON, a missing required field, a field we do not "
+                               "recognise, or an amount that is negative or not a number"],
+        ["401", "Unauthorized", "No credentials, broken credentials, or the wrong password"],
+        ["404", "Not Found", "That id does not exist, or that URL is not one of ours"],
     ]
     s.append(grid(errs, [1.5 * cm, 2.6 * cm, 9.7 * cm]))
     s.append(Spacer(1, 4))
-    s.append(P("Table 3 — Error codes. Every error shares the shape "
-               "<font face='Courier'>{\"error\": ..., \"status\": ...}</font>. "
-               "Full documentation is in <font face='Courier'>docs/api_docs.md</font>.", "caption"))
+    s.append(P("Table 3 — Error codes. Every error comes back in the same shape, "
+               "<font face='Courier'>{\"error\": ..., \"status\": ...}</font>, so a client can "
+               "handle them the same way each time. The full documentation is in "
+               "<font face='Courier'>docs/api_docs.md</font>.", "caption"))
 
     s.append(PageBreak())
 
     # ---------------------------------------------- 4. auth implementation --
-    s.append(P("4. Authentication Implementation", "h1"))
+    s.append(P("4. How We Implemented the Login", "h1"))
     s.append(P(
-        "Each request must carry an <font face='Courier'>Authorization</font> header holding the "
-        "Base64 encoding of <font face='Courier'>username:password</font>. The handler decodes it "
-        "and compares both halves against the configured credentials before any route logic runs, "
-        "so no endpoint can be reached without passing the check."))
+        "Every request has to carry an <font face='Courier'>Authorization</font> header holding the "
+        "username and password joined with a colon and base64-encoded. The handler decodes that and "
+        "checks both halves before any of the routing code runs, so there is no way to reach an "
+        "endpoint without passing the check first."))
     s.append(P("Authorization: Basic YWRtaW46bW9tbzIwMjU=", "code"))
-    s.append(P("Three implementation details are worth highlighting:", "body"))
+    s.append(P("Three details in our implementation are worth pointing out:", "body"))
     s.extend(bullets([
-        "<b>Constant-time comparison.</b> The credentials are checked with "
-        "<font face='Courier'>hmac.compare_digest()</font> rather than <font face='Courier'>==</font>. "
-        "A normal string comparison stops at the first differing character, and an attacker able to "
-        "measure that timing difference could recover the password one character at a time. "
-        "<font face='Courier'>compare_digest()</font> always takes the same time, closing that side channel.",
-        "<b>Credentials are not hardcoded.</b> They are read from the "
+        "We compare the credentials with <font face='Courier'>hmac.compare_digest()</font> instead "
+        "of <font face='Courier'>==</font>. A normal comparison stops at the first character that "
+        "does not match, so checking a nearly-correct password takes very slightly longer than "
+        "checking a completely wrong one. That difference is tiny but measurable, and an attacker "
+        "can use it to work out a password one character at a time. "
+        "<font face='Courier'>compare_digest()</font> always takes the same time, so there is "
+        "nothing to measure.",
+        "The credentials are not written into the code. They come from the "
         "<font face='Courier'>API_USERNAME</font> and <font face='Courier'>API_PASSWORD</font> "
-        "environment variables, with development defaults, so the deployed secret never needs to "
-        "live in source control.",
-        "<b>Every failure mode returns 401.</b> A missing header, a header that is not "
-        "<font face='Courier'>Basic</font>, corrupt Base64, and a simply wrong password are all "
-        "handled and all answered with 401 plus a "
-        "<font face='Courier'>WWW-Authenticate</font> challenge — never a 500.",
+        "environment variables and only fall back to defaults for development, so the real password "
+        "never has to be committed to git.",
+        "Every way of failing returns a 401 rather than a crash. A missing header, a header that is "
+        "not <font face='Courier'>Basic</font>, base64 that will not decode, and a simply wrong "
+        "password are all handled, and all answered with a 401 plus a "
+        "<font face='Courier'>WWW-Authenticate</font> header telling the client what to send.",
     ]))
 
     # ------------------------------------------------- 5. reflection -------
     s.append(P("5. Reflection: Why Basic Auth Is Weak", "h1"))
     s.append(P(
-        "Basic Authentication is implemented correctly here, but the scheme itself is weak, and for "
-        "real mobile money data it would not be acceptable."))
+        "We are confident the Basic Auth above is implemented properly. The scheme itself is still "
+        "the weakest part of the whole project, and it is worth being honest about why."))
 
-    s.append(P("5.1 Base64 is encoding, not encryption", "h2"))
+    s.append(P("5.1 Base64 is not encryption", "h2"))
     s.append(P(
-        "This is the central flaw. Base64 uses no key and no secret, so the transformation is "
-        "trivially reversible by anybody:"))
+        "This is the main issue, and it is easy to miss because the word \"encoded\" sounds like it "
+        "means something. It does not. Base64 uses no key and no secret, so anybody can undo it:"))
     s.append(P("$ echo -n 'admin:momo2025' | base64<br/>"
                "YWRtaW46bW9tbzIwMjU=<br/><br/>"
                "$ echo 'YWRtaW46bW9tbzIwMjU=' | base64 --decode<br/>"
                "admin:momo2025", "code"))
     s.append(P(
-        "The password is therefore effectively sent in plain text. Over plain HTTP anyone able to "
-        "observe the traffic — someone sharing a public Wi-Fi network, a compromised router, an ISP "
-        "— reads the real password directly off the wire. Basic Auth is only ever tolerable over "
-        "HTTPS, and even then the problems below remain."))
+        "So the password is really being sent in plain text. Over plain HTTP, anybody who can see "
+        "the traffic reads it straight off the wire. That might be someone else on the same coffee "
+        "shop wifi, a router that has been tampered with, or the internet provider. Basic Auth is "
+        "only acceptable at all if the connection is HTTPS, and even then the problems below still "
+        "apply."))
 
-    s.append(P("5.2 Further limitations", "h2"))
+    s.append(P("5.2 The other problems", "h2"))
     s.extend(bullets([
-        "<b>The password is replayed on every request.</b> Because HTTP is stateless, the credential "
-        "is resent with each call, multiplying the chances of it leaking into a proxy log, a crash "
-        "report or a screenshot. One leak exposes it permanently.",
-        "<b>No expiry and no revocation.</b> The credential stays valid until someone manually "
-        "changes the password, and changing it breaks every other client using that same account.",
-        "<b>A single shared account.</b> With one <font face='Courier'>admin</font> credential there "
-        "is no audit trail — the log shows that \"admin\" deleted a record, not who — and no least "
-        "privilege, since a read-only mobile client holds a credential that can also DELETE.",
-        "<b>No brute-force protection.</b> The implementation has no rate limiting, lockout or "
-        "second factor, so an attacker can guess passwords as fast as the server responds.",
+        "<b>The password goes out on every request.</b> HTTP does not remember anything between "
+        "requests, so the client resends it each time. Load a page that makes thirty API calls and "
+        "the password has crossed the network thirty times. Each one is a chance for it to end up "
+        "in a proxy log or an error report, and because it is the real password rather than a "
+        "temporary token, one leak is permanent.",
+        "<b>It does not expire, and you cannot cancel it.</b> A Basic Auth password stays valid "
+        "until a person changes it, and changing it is also the only way to shut it down. If five "
+        "apps share the login, changing it breaks all five, including the four that were fine.",
+        "<b>Everyone shares one account.</b> If a record gets deleted the log says \"admin\" did "
+        "it, not which person, so there is no real audit trail. A read-only mobile app also ends up "
+        "holding a password that can delete every record in the database.",
+        "<b>Nothing slows down guessing.</b> We have no rate limiting, no lockout after failed "
+        "attempts and no second factor, so an attacker can try passwords as fast as the server "
+        "answers them.",
     ]))
 
-    s.append(P("5.3 Stronger alternatives", "h2"))
+    s.append(P("5.3 What we would use instead", "h2"))
     s.append(P(
-        "<b>JWT (JSON Web Tokens).</b> The client authenticates once at a login endpoint and "
-        "receives a signed token, sent afterwards as "
-        "<font face='Courier'>Authorization: Bearer &lt;token&gt;</font>. The token carries claims "
-        "such as user id, role and an expiry timestamp, and is signed with a server-held key. This "
-        "means the real password crosses the network only once, tokens expire on their own so a "
-        "stolen one is useful only briefly, and the embedded claims enable per-user audit logs and "
-        "role-based access. The trade-off is that a JWT is signed but not encrypted, so its payload "
-        "is still readable and must never hold secrets; and because verification is stateless, "
-        "tokens are kept short-lived and backed by a refresh flow rather than revoked directly."))
+        "<b>JWT.</b> The client sends its password once, to a login endpoint, and gets back a "
+        "signed token that it sends from then on as "
+        "<font face='Courier'>Authorization: Bearer &lt;token&gt;</font>. The token carries the "
+        "user's id, their role and an expiry time, and it is signed with a key only the server "
+        "knows. That fixes most of what is wrong above. The real password crosses the network once "
+        "instead of constantly, tokens expire on their own so a stolen one is useful only briefly, "
+        "and because the token says who the user is you can keep a proper audit log and give a "
+        "read-only app a read-only token. The catch is that a JWT is signed but not encrypted, so "
+        "anyone holding it can read what is inside and you must never put secrets in there. And "
+        "since the server only checks the signature rather than looking anything up, you cannot "
+        "easily cancel a token before it expires, which is why access tokens are usually kept short "
+        "and paired with a refresh token."))
     s.append(P(
-        "<b>OAuth 2.0.</b> Where third-party applications are involved, an authorization server "
-        "issues scoped access tokens so the third party never sees the user's password at all. For "
-        "a MoMo system a budgeting app could be granted "
-        "<font face='Courier'>transactions:read</font> and nothing more — able to list transactions "
-        "but never delete one — and the user could revoke that single app at any time without "
-        "changing their own password. The cost is significantly greater complexity and the need to "
-        "run an authorization server, which is justified for multi-client access but excessive for "
-        "one trusted internal client."))
+        "<b>OAuth 2.0.</b> This is the right answer once other people's applications are involved. "
+        "Instead of a third-party app holding the user's password, a separate authorization server "
+        "issues tokens with scopes attached. A budgeting app that wants to show someone their MoMo "
+        "spending could be given a token scoped to <font face='Courier'>transactions:read</font> "
+        "and nothing else. It could list transactions and that is all, and the user could cut that "
+        "one app off whenever they liked without changing their password or affecting anything else "
+        "they use. The downside is that it is a lot more work and needs an authorization server "
+        "running, which is overkill for a project with one trusted client."))
     s.append(P(
-        "<b>Supporting measures.</b> Whichever scheme is chosen, HTTPS/TLS is mandatory, passwords "
-        "should be stored salted and hashed with bcrypt or Argon2, login endpoints should be rate "
-        "limited, and per-user accounts with roles should replace the single shared login so that "
-        "actions are attributable."))
+        "<b>Either way,</b> the connection has to be HTTPS, because without it every scheme here "
+        "leaks its password or token in transit. Passwords should be stored salted and hashed with "
+        "something slow like bcrypt or Argon2, the login endpoint should be rate limited, and each "
+        "person should have their own account with a role rather than everyone sharing one."))
 
     s.append(PageBreak())
 
     # ---------------------------------------------------- 6. DSA results ---
-    s.append(P("6. Data Structures and Algorithms Comparison", "h1"))
+    s.append(P("6. Comparing Linear Search and Dictionary Lookup", "h1"))
     s.append(P(
-        "Two strategies for finding a transaction by id were implemented in "
-        "<font face='Courier'>dsa/dsa_comparison.py</font> and timed against each other:"))
+        "We built two ways of finding a transaction by its id in "
+        "<font face='Courier'>dsa/dsa_comparison.py</font> and timed them against each other:"))
     s.extend(bullets([
-        "<b>Linear search</b> — walk the list of transactions one record at a time, comparing each "
-        "id until the target is found.",
-        "<b>Dictionary lookup</b> — build a dictionary mapping id to transaction once, then fetch "
-        "the target by key.",
+        "<b>Linear search</b> walks the list of transactions one record at a time, checking each id "
+        "until it finds the one it wants.",
+        "<b>Dictionary lookup</b> builds a dictionary of id to transaction once, then fetches the "
+        "record by key.",
     ]))
     s.append(P(
-        f"Both were run against all 1,691 records for <b>20 target ids</b> spaced evenly across the "
-        f"dataset, with <b>1,000 repetitions per measurement</b> using Python's "
-        f"<font face='Courier'>timeit</font> module. Each result was asserted equal across the two "
-        f"methods so the comparison is like for like. Alongside wall-clock time the benchmark also "
-        f"counts the <b>number of record comparisons</b> each strategy performs, measured in a "
-        f"separate pass so the counter never distorts the timings. That count matters because it is "
-        f"independent of how fast this particular machine happens to be."))
+        "We ran both against all 1,691 records for <b>20 different ids</b> spread evenly across the "
+        "dataset, repeating each measurement <b>1,000 times</b> with Python's "
+        "<font face='Courier'>timeit</font> module. We also checked that both methods returned the "
+        "same record every time, so we know we were comparing like with like. On top of the timings "
+        "we counted how many record comparisons each method actually performs, done in a separate "
+        "pass so the counting never slows down the timed run. That count turned out to be the more "
+        "useful number, for reasons we get to below."))
 
     data = [["Target id", "Position", "Linear (\u00b5s)", "Dict (\u00b5s)",
              "Speed-up", "Linear cmps", "Dict cmps"]]
@@ -419,93 +437,98 @@ def build():
     ]))
     s.append(t)
     s.append(Spacer(1, 4))
-    s.append(P("Table 4 — Measured lookup cost. Full output is captured in "
+    s.append(P("Table 4 — What we measured. The full output is saved in "
                "<font face='Courier'>screenshots/dsa_results.txt</font>.", "caption"))
 
-    s.append(P("6.1 Why dictionary lookup is faster", "h2"))
+    s.append(P("6.1 Why the dictionary is faster", "h2"))
     s.append(P(
-        f"The table shows the pattern clearly. Linear search costs rise steadily with how deep the "
-        f"record sits in the list — roughly {rows[0][2]} \u00b5s for the first record against "
-        f"{rows[-1][2]} \u00b5s for one near the end — because the number of comparisons grows in "
-        f"direct proportion to the position. That is <b>O(n)</b> behaviour. Dictionary lookup, by "
-        f"contrast, stays flat at about {dict_avg} \u00b5s no matter where the record sits, which is "
-        f"<b>O(1)</b>."))
+        f"The pattern in the table is hard to miss. Linear search gets steadily slower the further "
+        f"into the list the record sits, going from about {rows[0][2]} \u00b5s for the very first "
+        f"record up to {rows[-1][2]} \u00b5s for one near the end. That is because it has to check "
+        f"every record it passes on the way, and that is what O(n) means in practice. The "
+        f"dictionary stays at roughly {dict_avg} \u00b5s the whole way down the table no matter "
+        f"where the record is, which is O(1)."))
     s.append(P(
-        f"The comparison counts make the same point without depending on machine speed at all. "
-        f"Linear search needs exactly as many comparisons as the record's position \u2014 1 for the "
-        f"first record and {rows[-1][5]} for the last one sampled, averaging {lin_cmps_avg} across "
-        f"the 20 targets. Dictionary lookup needs {dict_cmps_avg} comparison every single time, "
-        f"regardless of position or dataset size. A faster processor would shrink both timing "
-        f"columns, but it would not change these counts \u2014 which is what makes the difference "
-        f"structural rather than incidental."))
+        "The reason is that a dictionary does not really search at all. Python runs the id through "
+        "a hash function, and the answer tells it exactly which bucket the record is sitting in, so "
+        "it goes straight there. It does the same amount of work whether the dictionary holds ten "
+        "records or ten thousand. Linear search has no such shortcut. It has to compare records one "
+        "by one until it gets a match."))
     s.append(P(
-        "The reason is that a dictionary does not search at all. Python hashes the key once, and "
-        "that hash tells it directly which bucket the value lives in, so the work done is the same "
-        "whether the dictionary holds ten records or ten thousand. Linear search has no such "
-        "shortcut and must compare records one by one until it finds a match. Averaged across the "
-        f"20 sampled ids, the dictionary is about <b>{speedup}x faster</b> on this dataset, doing "
-        f"{dict_cmps_avg} comparison where linear search does {lin_cmps_avg}."))
+        f"The comparison counts show the same thing without depending on the computer at all, which "
+        f"is why we added them. Linear search needs exactly as many comparisons as the record's "
+        f"position: 1 for the first record, {rows[-1][5]} for the last one we sampled, and "
+        f"{lin_cmps_avg} on average across the twenty. The dictionary needs "
+        f"{dict_cmps_avg} comparison every single time. A faster laptop would shrink both timing "
+        f"columns, but it would not change these counts by one. The difference is in how the two "
+        f"methods work, not in how quick the machine is."))
     s.append(P(
-        "The trade-off is memory and setup: the dictionary has to be built first, an O(n) pass, and "
-        "it holds an extra reference per record. That cost is paid once and repaid on every "
-        "subsequent lookup, which is why the API itself stores transactions in a dictionary keyed "
-        "by id — making every GET, PUT and DELETE by id an O(1) operation."))
+        f"Averaged over the twenty ids the dictionary came out about <b>{speedup}x faster</b>. It "
+        f"is not free, though. You have to build the dictionary first, which is one pass through "
+        f"the data, and it keeps an extra reference for every record. You pay that once and get it "
+        f"back on every lookup afterwards, which is exactly why the API itself stores its "
+        f"transactions in a dictionary. It means getting, updating or deleting a record by id is an "
+        f"O(1) operation instead of a scan."))
 
-    s.append(P("6.2 Other structures that would improve on linear search", "h2"))
+    s.append(P("6.2 What else could we have used?", "h2"))
+    s.append(P("A dictionary is not the only thing that beats a linear scan:"))
     s.extend(bullets([
-        "<b>Binary search</b> on an id-sorted list — <b>O(log n)</b>, halving the search space each "
-        "step. It needs no extra memory beyond keeping the list sorted, but every insertion must "
-        "preserve that order.",
-        "<b>B-tree or database index</b> — how a real database indexes a primary key. It keeps "
-        "lookups fast while also supporting range queries a hash cannot answer, such as \"all "
-        "transactions between two dates\".",
-        "<b>Hash index on secondary fields</b> — building the same id-to-record trick for "
-        "<font face='Courier'>sender</font> or <font face='Courier'>transaction_type</font> would "
-        "extend O(1) lookup beyond the primary key.",
+        "<b>Binary search</b> on a list kept sorted by id. Each step throws away half of what is "
+        "left, so it is O(log n). It needs no extra memory, but the list has to stay sorted, which "
+        "means every insertion costs something.",
+        "<b>A B-tree, or a database index.</b> This is what a real database uses for a primary key. "
+        "It stays fast and it can also answer questions a hash cannot, like asking for every "
+        "transaction between two dates.",
+        "<b>A second dictionary on a different field</b>, say <font face='Courier'>sender</font> or "
+        "<font face='Courier'>transaction_type</font>. Same trick, just applied to something other "
+        "than the id, if that is what you need to search on.",
     ]))
 
     # ---------------------------------------------------- 7. testing -------
     s.append(P("7. Testing and Validation", "h1"))
     s.append(P(
-        "The API was tested end to end with <font face='Courier'>curl</font> via "
-        "<font face='Courier'>screenshots/run_tests.sh</font>, which exercises nine cases and "
-        "captures the full request/response transcript to "
+        "We tested the API end to end with <font face='Courier'>curl</font>, using "
+        "<font face='Courier'>screenshots/run_tests.sh</font>. It runs nine cases and saves the "
+        "whole request and response transcript to "
         "<font face='Courier'>screenshots/api_test_results.txt</font>."))
-    tests = [["#", "Test case", "Expected"]]
+    tests = [["#", "What we tested", "Expected"]]
     tests += [
-        ["1", "GET /transactions with valid credentials", "200"],
-        ["2", "GET /transactions/1 with valid credentials", "200"],
-        ["3", "GET /transactions with wrong password", "401"],
-        ["4", "GET /transactions with no credentials", "401"],
+        ["1", "GET /transactions with the right credentials", "200"],
+        ["2", "GET /transactions/1 with the right credentials", "200"],
+        ["3", "GET /transactions with the wrong password", "401"],
+        ["4", "GET /transactions with no credentials at all", "401"],
         ["5", "POST /transactions creating a record", "201"],
-        ["6", "PUT on the newly created record", "200"],
-        ["7", "DELETE the newly created record", "200"],
-        ["8", "GET the deleted record", "404"],
-        ["9", "POST with a non-numeric amount", "400"],
+        ["6", "PUT on the record we had just created", "200"],
+        ["7", "DELETE the record we had just created", "200"],
+        ["8", "GET that record again after deleting it", "404"],
+        ["9", "POST with an amount that is not a number", "400"],
     ]
     s.append(grid(tests, [1.0 * cm, 10.8 * cm, 2.1 * cm]))
     s.append(Spacer(1, 4))
-    s.append(P("Table 5 — Test cases. All nine produced the expected status code.", "caption"))
+    s.append(P("Table 5 — The nine test cases. All of them returned the status code we expected.",
+               "caption"))
     s.append(P(
-        "The script reads the server-assigned id back from the POST response rather than assuming "
-        "one, so the whole suite can be re-run repeatedly against a running server without the "
-        "update, delete and 404 cases drifting out of step."))
+        "One small thing we changed part way through: the script now reads the new id out of the "
+        "POST response instead of assuming what it will be. Before that, running the tests twice "
+        "against the same server made the update, delete and 404 cases fail, because the id had "
+        "moved on and the script was still looking for the old one."))
 
     # ---------------------------------------------------- 8. conclusion ----
     s.append(P("8. Conclusion", "h1"))
     s.append(P(
-        "The system parses all 1,691 SMS records into structured JSON, serves them through five "
-        "CRUD endpoints built on the Python standard library, and protects every endpoint with "
-        "Basic Authentication that correctly returns 401 for missing, malformed and incorrect "
-        "credentials. The DSA comparison demonstrates in measured numbers why the API stores its "
-        f"records in a dictionary: an average {speedup}x speed-up over linear search, and a lookup "
-        "cost that stays flat as the dataset grows."))
+        "The system reads all 1,691 SMS records out of the XML and turns them into structured JSON, "
+        "serves them through five endpoints built on nothing but the Python standard library, and "
+        "puts Basic Authentication in front of all of them, returning 401 for credentials that are "
+        "missing, malformed or simply wrong. The search comparison gave us a real reason for a "
+        f"design decision rather than a guess: the dictionary was about {speedup}x faster on "
+        "average, and more importantly its cost does not grow as the dataset does."))
     s.append(P(
-        "The main limitation is the authentication scheme itself. Because Base64 is encoding rather "
-        "than encryption, the password is effectively sent in the clear on every single request, "
-        "with no expiry, no revocation and no per-user identity. The next step for this project "
-        "would be to serve the API over HTTPS and replace Basic Auth with short-lived JWTs, adding "
-        "OAuth 2.0 scopes once third-party applications need access to the data."))
+        "The weakest part is the authentication, and that is worth saying plainly. Because base64 "
+        "is encoding rather than encryption, the password is effectively sent in the clear on every "
+        "request, it never expires, it cannot be revoked, and there is no way to tell one user from "
+        "another. If this were going to be used for real, the next steps would be to put it behind "
+        "HTTPS and move to short-lived JWTs, then add OAuth 2.0 scopes later if other people's "
+        "applications ever needed access to the data."))
 
     doc.build(s, onFirstPage=footer, onLaterPages=footer)
     print(f"Wrote {OUT_PDF}")

@@ -1,44 +1,47 @@
-# Security Notes — Basic Authentication and Stronger Alternatives
+# Security Notes — What Is Wrong With Basic Auth, and What To Use Instead
 
-This API protects every endpoint with **HTTP Basic Authentication**. This document explains how it
-works here, why Basic Auth is considered weak, and which stronger schemes should replace it in a
-production deployment.
+This API uses HTTP Basic Authentication on every endpoint, because that is what the assignment asked
+for. This file explains how we implemented it, why Basic Auth is a weak choice on its own, and what
+a real system would use in its place.
 
 ---
 
-## 1. How Basic Auth works in this API
+## 1. How our login works
 
-On every request the client sends an `Authorization` header:
+With every request, the client sends a header like this:
 
 ```
 Authorization: Basic YWRtaW46bW9tbzIwMjU=
 ```
 
-The value after `Basic ` is `base64(username:password)`. In [`api/app.py`](../api/app.py) the
-`authenticated()` method:
+The part after `Basic ` is just the username and password stuck together with a colon and then
+base64-encoded. In [`api/app.py`](../api/app.py), the `authenticated()` method does four things:
 
-1. Rejects the request with **401** if the header is missing or does not start with `Basic `.
-2. Base64-decodes the credentials, rejecting malformed input with **401**.
-3. Compares the username and password using `hmac.compare_digest()`.
-4. Returns **401** with a `WWW-Authenticate: Basic realm="MoMo Transactions API"` header when the
-   credentials do not match.
+1. If there is no header, or it does not start with `Basic `, it sends back a **401** and stops.
+2. It decodes the base64. If that fails because the header is malformed, it sends back a **401**.
+3. It compares the username and password using `hmac.compare_digest()`.
+4. If either one does not match, it sends back a **401** with a
+   `WWW-Authenticate: Basic realm="MoMo Transactions API"` header.
 
-`hmac.compare_digest()` is used instead of `==` because a normal string comparison returns as soon
-as it finds the first differing character. An attacker could measure those tiny timing differences
-to guess the password one character at a time. `compare_digest()` always takes the same amount of
-time, which removes that side channel.
+The reason we used `hmac.compare_digest()` instead of a normal `==` is worth explaining. When Python
+compares two strings with `==`, it stops as soon as it hits a character that does not match. So
+comparing `"aaaa"` to `"bbbb"` finishes faster than comparing `"aaaa"` to `"aaab"`. That difference
+is tiny, but an attacker who can measure it carefully can use it to work out the password one
+character at a time. `compare_digest()` always takes the same amount of time no matter where the
+difference is, so there is nothing to measure.
 
-Credentials are read from the environment (`API_USERNAME` / `API_PASSWORD`) so they are not
-compiled into the source code, with development defaults of `admin` / `momo2025`.
+We also kept the credentials out of the code. They come from the `API_USERNAME` and `API_PASSWORD`
+environment variables, and only fall back to `admin` / `momo2025` for development. That way the real
+password never has to be committed to git.
 
 ---
 
 ## 2. Why Basic Auth is weak
 
-### 2.1 Base64 is encoding, not encryption
+### 2.1 Base64 is not encryption
 
-This is the core problem. Base64 is a reversible transformation with no key and no secret — anyone
-can decode it instantly:
+This is the main problem, and it is worth being clear about it. Base64 is not a security measure at
+all. There is no key and no secret involved, so anybody can undo it:
 
 ```bash
 $ echo -n 'admin:momo2025' | base64
@@ -48,128 +51,133 @@ $ echo 'YWRtaW46bW9tbzIwMjU=' | base64 --decode
 admin:momo2025
 ```
 
-The credentials are effectively sent in plain text. Over plain HTTP, anyone able to observe the
-traffic — someone on the same public Wi-Fi, a compromised router, an ISP — reads the real password
-straight off the wire. Basic Auth is only ever acceptable over HTTPS, and even then the weaknesses
-below remain.
+So when we say the credentials are "encoded", that is all it is. The password is effectively being
+sent in plain text. If the connection is plain HTTP, then anyone who can see the traffic can read
+the real password straight off the wire. That could be someone else on the same coffee shop wifi, a
+router that has been tampered with, or the internet provider. Basic Auth is only acceptable at all
+if everything is running over HTTPS, and even then the problems below do not go away.
 
-### 2.2 The password is replayed on every single request
+### 2.2 The password is sent over and over
 
-HTTP is stateless, so the client must resend the password with *every* request. One leaked request
-— in a proxy log, a browser history entry, a crash report, a screenshot — exposes the password
-permanently. A token-based scheme sends the real secret once, at login, and everything afterwards
-uses a short-lived token.
+HTTP does not remember anything between requests, so the client has to send the password again every
+single time it asks for something. Load a page that makes thirty API calls and the password has gone
+over the network thirty times.
 
-### 2.3 No expiry and no way to revoke
+Each one of those is a chance for it to be captured or to get written down somewhere it should not
+be, like a proxy log or an error report. And because it is the real password and not a temporary
+stand-in, one leak is permanent.
 
-A Basic Auth credential is valid until someone manually changes the password. There is no built-in
-expiry. If a password leaks, the only remedy is to change it — which immediately breaks every other
-client using that same account. Tokens, by contrast, expire on their own and can be revoked
-individually.
+### 2.3 It does not expire and you cannot cancel it
 
-### 2.4 No identity and no granularity
+A Basic Auth password stays valid until a human changes it. There is no built-in expiry date. So if
+it does leak, you will not find out, and it will keep working until somebody notices.
 
-This API has a single shared `admin` account. That creates three problems:
+Changing the password is the only way to shut it down, and that is a blunt instrument. If five
+different apps are using the same login, changing it breaks all five at once, including the four
+that were never compromised.
 
-- **No accountability.** The server logs show that "admin" deleted transaction 412, but not *who*.
-  With shared credentials there is no audit trail.
-- **No least privilege.** Every authenticated caller gets full CRUD. A mobile app that only needs
-  `GET /transactions` holds a credential that can also `DELETE` records.
-- **No per-client revocation.** Rotating the password to cut off one client cuts off all of them.
+### 2.4 One account for everybody
 
-### 2.5 Vulnerable to brute force
+Our API has a single `admin` login that everyone shares. That causes three separate problems:
 
-The credential is a single static password with no lockout, rate limiting, or second factor in this
-implementation. An attacker can try passwords as fast as the server will answer.
+First, there is no way to tell who did what. If a record gets deleted, the server log says "admin"
+deleted it. It does not say which person, because as far as the server is concerned there is only
+one user.
+
+Second, everyone gets full access whether they need it or not. A mobile app that only ever reads
+transactions still has to hold a password that can delete every record in the database.
+
+Third, you cannot cut off one client. Rotating the password to lock out an app you no longer trust
+locks out everybody else too.
+
+### 2.5 Nothing stops someone guessing
+
+Our implementation has no rate limiting, no account lockout after failed attempts, and no second
+factor. An attacker can just keep trying passwords as fast as the server will answer them.
 
 ### 2.6 Summary
 
-| Weakness | Consequence |
+| The problem | What it means in practice |
 |---|---|
-| Base64 is not encryption | Password readable by anyone observing traffic |
-| Password resent on every request | Many chances to leak; one leak is permanent |
-| No expiry | A stolen credential works forever |
-| No revocation | Cannot cut off one client without breaking all |
-| Single shared account | No audit trail, no least privilege |
-| No rate limiting | Open to brute-force guessing |
+| Base64 is not encryption | Anyone watching the traffic reads the password |
+| Sent on every request | Many chances to leak, and one leak is permanent |
+| Never expires | A stolen password works forever |
+| Cannot be revoked | Cutting off one client breaks all of them |
+| One shared account | No record of who did what, and no limited access |
+| No rate limiting | Passwords can be guessed at full speed |
 
 ---
 
-## 3. Stronger alternatives
+## 3. Better options
 
 ### 3.1 JWT (JSON Web Tokens)
 
-The client authenticates **once** at a `/login` endpoint and receives a signed token. Every later
-request sends that token instead of the password:
+With JWT, the client sends its username and password once, to a login endpoint, and gets back a
+token. After that it sends the token instead of the password:
 
 ```
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMiLCJyb2xlIjoicmVhZGVyIn0.<signature>
 ```
 
-A JWT has three parts — header, payload, signature. The payload carries claims such as the user id,
-their role, and an `exp` (expiry) timestamp. The signature is produced with a secret key held only
-by the server, so the server can verify the token has not been tampered with without storing any
-session state.
+A token has three parts. The middle part holds claims, which is just information about the user:
+who they are, what role they have, and an expiry time. The third part is a signature made with a
+secret key that only the server knows, so the server can check the token has not been altered
+without having to store anything about the session.
 
-**What this fixes:**
+This fixes most of what is wrong above. The actual password crosses the network once instead of
+hundreds of times. Tokens expire on their own, so a stolen one is only useful for a few minutes.
+And because the token says who the user is and what they are allowed to do, you can keep a proper
+audit log and give a read-only app a read-only token.
 
-- The real password crosses the network once, not on every request.
-- Tokens expire automatically (`exp`), so a stolen token is useful only briefly.
-- Claims carry identity and role, enabling per-user audit logs and least privilege — a read-only
-  token can be issued to a client that only needs `GET`.
-- Short-lived access tokens paired with longer-lived refresh tokens allow revocation at refresh
-  time.
-
-**Trade-offs:** a JWT is signed, not encrypted, so its payload is still readable — never put
-secrets in it. Because verification is stateless, an issued token cannot easily be invalidated
-before it expires, which is why access tokens are kept short-lived (minutes) and backed by a
-refresh-token flow.
+It is not perfect. A JWT is signed but not encrypted, which means anyone holding it can read what is
+inside, so you must never put anything secret in there. And since the server checks the signature
+rather than looking the token up in a database, you cannot easily cancel a token before it expires.
+The usual answer is to make access tokens short-lived and hand out a longer-lived refresh token
+alongside them, which gives you a point where access can be denied.
 
 ### 3.2 OAuth 2.0
 
-OAuth 2.0 is an authorization *framework* rather than a single mechanism, and it is the right choice
-when third parties are involved. Instead of a client ever holding the user's password, an
-authorization server issues scoped access tokens.
+OAuth 2.0 is bigger than a single login mechanism. It is a whole framework, and it is the right
+choice once other people's applications are involved. Rather than the client holding the user's
+password, a separate authorization server issues access tokens with scopes attached.
 
-For a MoMo system this matters directly: a budgeting app could be granted a token with scope
-`transactions:read` and nothing more. It could list transactions but never delete one, and the user
-could revoke that app's access at any time without changing their own password or affecting any
-other app.
+The scopes are the useful part. Imagine a budgeting app that wants to show someone their MoMo
+spending. With OAuth 2.0 it can be given a token with the scope `transactions:read` and nothing
+more. It can list transactions, and that is it, and the user can revoke that one app whenever they
+want without changing their password or affecting any other app they use.
 
-**What this fixes:**
+The trade-off is that OAuth 2.0 is a lot more work to set up and needs an authorization server
+running. For a project with one trusted client it is overkill. For anything where third parties need
+access, it is the standard for good reason.
 
-- Third-party apps never see the user's credentials.
-- **Scopes** enforce least privilege (`transactions:read` vs `transactions:write`).
-- Access can be revoked per application.
-- The token lifecycle — issue, refresh, revoke — is handled by a dedicated authorization server.
+### 3.3 Things you should do either way
 
-**Trade-offs:** considerably more complex to implement and operate, and it needs an authorization
-server. That complexity is justified for multi-client or third-party access, and is overkill for a
-single trusted internal client.
+None of the above helps much on its own. These go with it:
 
-### 3.3 Supporting measures
-
-Whichever scheme is used, these apply regardless:
-
-- **HTTPS/TLS everywhere** — mandatory. It encrypts the whole exchange, including headers. Without
-  it, every scheme above leaks its credential or token in transit.
-- **Hashed password storage** — store passwords with a slow, salted hash such as bcrypt or Argon2,
-  never in plain text.
-- **Rate limiting and lockout** on the login endpoint to blunt brute-force attempts.
-- **Per-user accounts with roles** instead of one shared `admin`, so actions are attributable.
-- **Server-side audit logging** of every write operation, recording who changed what and when.
+- **Use HTTPS.** This one is not optional. TLS encrypts the whole request including the headers.
+  Without it, every scheme here leaks its password or token in transit.
+- **Hash stored passwords** with something slow and salted like bcrypt or Argon2. Never store them
+  as plain text.
+- **Rate limit the login endpoint** and lock accounts after repeated failures, so guessing does not
+  scale.
+- **Give each person their own account** with a role, instead of one shared `admin`, so you can tell
+  who did what.
+- **Log every write** with the user, the action and the time.
 
 ---
 
 ## 4. Conclusion
 
-Basic Authentication is implemented correctly here — constant-time comparison, credentials taken
-from the environment, correct `401` responses with a `WWW-Authenticate` challenge, and handling for
-missing and malformed headers. It is a reasonable fit for a coursework project with a single trusted
-client.
+We think the Basic Auth in this project is implemented properly. The credentials come from the
+environment rather than the source code, the comparison is constant-time, the 401 responses include
+the right challenge header, and missing or malformed headers are handled instead of crashing the
+server.
 
-It is not suitable for real mobile money data. Because Base64 is encoding rather than encryption,
-the password is effectively transmitted in the clear and is resent on every request, with no expiry,
-no revocation, and no per-user identity. A production version of this API should run over HTTPS and
-issue short-lived JWTs for first-party clients, adding OAuth 2.0 scopes once third-party
-applications need access to the data.
+The scheme itself is still the weakest part of the project, and it would not be acceptable for real
+mobile money data. Base64 is encoding and not encryption, so the password is effectively in the
+clear, it is resent constantly, it never expires, it cannot be revoked, and there is no way to tell
+one user from another.
+
+If this were going to be used for real, we would put it behind HTTPS and switch to short-lived JWTs
+for our own apps, then add OAuth 2.0 scopes later if other people's applications ever needed access
+to the data.
