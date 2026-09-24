@@ -1,0 +1,11 @@
+# The parser, API and DSA benchmark use only the Python standard library.
+# Nothing below is needed to run or test the project.
+#
+#   python3 dsa/parse_xml.py        # parse XML -> JSON
+#   python3 api/app.py              # start the REST API
+#   python3 dsa/dsa_comparison.py   # run the search benchmark
+#   bash screenshots/run_tests.sh   # run the curl test suite
+#
+# reportlab is only required to regenerate the PDF report:
+#   python3 docs/build_report.py
+reportlab>=4.0
