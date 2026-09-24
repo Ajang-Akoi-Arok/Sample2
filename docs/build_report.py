@@ -97,11 +97,13 @@ def read_dsa_results():
     rows, average = [], None
     with open(DSA_RESULTS, encoding="utf-8") as fh:
         for line in fh:
-            m = re.match(r"\s*(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)x", line)
+            m = re.match(
+                r"\s*(\d+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)x\s+(\d+)\s+(\d+)\s*$", line)
             if m:
                 rows.append(m.groups())
                 continue
-            m = re.match(r"\s*AVERAGE\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)x", line)
+            m = re.match(
+                r"\s*AVERAGE\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)x\s+([\d.]+)\s+([\d.]+)", line)
             if m:
                 average = m.groups()
     if not rows or average is None:
@@ -123,7 +125,7 @@ def footer(canvas, doc):
 
 def build():
     rows, average = read_dsa_results()
-    lin_avg, dict_avg, speedup = average
+    lin_avg, dict_avg, speedup, lin_cmps_avg, dict_cmps_avg = average
 
     doc = SimpleDocTemplate(
         OUT_PDF, pagesize=A4,
@@ -398,15 +400,19 @@ def build():
         f"Both were run against all 1,691 records for <b>20 target ids</b> spaced evenly across the "
         f"dataset, with <b>1,000 repetitions per measurement</b> using Python's "
         f"<font face='Courier'>timeit</font> module. Each result was asserted equal across the two "
-        f"methods so the comparison is like for like."))
+        f"methods so the comparison is like for like. Alongside wall-clock time the benchmark also "
+        f"counts the <b>number of record comparisons</b> each strategy performs, measured in a "
+        f"separate pass so the counter never distorts the timings. That count matters because it is "
+        f"independent of how fast this particular machine happens to be."))
 
-    data = [["Target id", "Position in list", "Linear search (\u00b5s)",
-             "Dictionary (\u00b5s)", "Speed-up"]]
-    for tid, pos, lin, dct, spd in rows:
-        data.append([tid, pos, lin, dct, f"{spd}x"])
-    data.append(["AVERAGE", "", lin_avg, dict_avg, f"{speedup}x"])
-    t = grid(data, [2.3 * cm, 3.0 * cm, 3.6 * cm, 3.2 * cm, 2.5 * cm],
-             align_right=(0, 1, 2, 3, 4))
+    data = [["Target id", "Position", "Linear (\u00b5s)", "Dict (\u00b5s)",
+             "Speed-up", "Linear cmps", "Dict cmps"]]
+    for tid, pos, lin, dct, spd, lcmp, dcmp in rows:
+        data.append([tid, pos, lin, dct, f"{spd}x", lcmp, dcmp])
+    data.append(["AVERAGE", "", lin_avg, dict_avg, f"{speedup}x",
+                 lin_cmps_avg, dict_cmps_avg])
+    t = grid(data, [2.1 * cm, 2.0 * cm, 2.4 * cm, 2.2 * cm, 2.2 * cm, 2.7 * cm, 2.4 * cm],
+             align_right=(0, 1, 2, 3, 4, 5, 6))
     t.setStyle(TableStyle([
         ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#dce7f2")),
@@ -425,11 +431,20 @@ def build():
         f"contrast, stays flat at about {dict_avg} \u00b5s no matter where the record sits, which is "
         f"<b>O(1)</b>."))
     s.append(P(
+        f"The comparison counts make the same point without depending on machine speed at all. "
+        f"Linear search needs exactly as many comparisons as the record's position \u2014 1 for the "
+        f"first record and {rows[-1][5]} for the last one sampled, averaging {lin_cmps_avg} across "
+        f"the 20 targets. Dictionary lookup needs {dict_cmps_avg} comparison every single time, "
+        f"regardless of position or dataset size. A faster processor would shrink both timing "
+        f"columns, but it would not change these counts \u2014 which is what makes the difference "
+        f"structural rather than incidental."))
+    s.append(P(
         "The reason is that a dictionary does not search at all. Python hashes the key once, and "
         "that hash tells it directly which bucket the value lives in, so the work done is the same "
         "whether the dictionary holds ten records or ten thousand. Linear search has no such "
         "shortcut and must compare records one by one until it finds a match. Averaged across the "
-        f"20 sampled ids, the dictionary is about <b>{speedup}x faster</b> on this dataset."))
+        f"20 sampled ids, the dictionary is about <b>{speedup}x faster</b> on this dataset, doing "
+        f"{dict_cmps_avg} comparison where linear search does {lin_cmps_avg}."))
     s.append(P(
         "The trade-off is memory and setup: the dictionary has to be built first, an O(n) pass, and "
         "it holds an extra reference per record. That cost is paid once and repaid on every "
